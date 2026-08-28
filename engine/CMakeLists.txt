@@ -16,6 +16,11 @@ add_executable(fea_engine
     src/Node.cpp
     src/Material.cpp
     src/Model.cpp
+    src/TrussElement.cpp
+    src/Assembler.cpp
+    src/LoadVector.cpp
+    src/BoundaryConditions.cpp
+    src/Solver.cpp
 )
 
 target_include_directories(fea_engine
