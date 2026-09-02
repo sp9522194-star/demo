@@ -21,6 +21,9 @@ add_executable(fea_engine
     src/LoadVector.cpp
     src/BoundaryConditions.cpp
     src/Solver.cpp
+    src/StressAnalysis.cpp
+    src/Validation.cpp
+    src/TrussMeshGenerator.cpp
 )
 
 target_include_directories(fea_engine

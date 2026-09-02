@@ -1,75 +1,181 @@
-#include <cmath>
-#include <iomanip>
 #include <iostream>
+#include <vector>
+#include <cmath>
+
+#include <Eigen/Dense>
 
 #include "Node.h"
 #include "Material.h"
-#include "Model.h"
 #include "TrussElement.h"
+#include "Model.h"
 #include "Assembler.h"
 #include "LoadVector.h"
 #include "BoundaryConditions.h"
 #include "Solver.h"
+#include "StressAnalysis.h"
+#include "Validation.h"
+#include "TrussMeshGenerator.h"
 
 int main() {
 
-    // ========================================
-    // 1. Create model
-    // ========================================
+    std::cout << "========================================\n";
+    std::cout << "           2D FEA ENGINE\n";
+    std::cout << "========================================\n\n";
+
+
+    // ============================================================
+    // 1. MATERIAL
+    // ============================================================
+
+    Material steel(
+        200e9,       // Young's modulus = 200 GPa
+        0.01         // Area = 0.01 m^2
+    );
+
+    std::cout << "Material created.\n";
+
+    std::cout << "Young's Modulus = "
+              << steel.getYoungsModulus()
+              << " Pa\n";
+
+    std::cout << "Area = "
+              << steel.getArea()
+              << " m^2\n";
+
+
+    // ============================================================
+    // 2. MESH GENERATION TEST
+    // ============================================================
+
+    std::cout
+        << "\n========== MESH TEST ==========\n\n";
+
+    Node start(
+        1,
+        0.0,
+        0.0
+    );
+
+    Node end(
+        2,
+        5.0,
+        0.0
+    );
+
+    int divisions = 4;
+
+    std::vector<Node> meshNodes =
+        TrussMeshGenerator::generateNodes(
+            start,
+            end,
+            divisions,
+            10
+        );
+
+    for (const Node& node : meshNodes) {
+
+        std::cout
+            << "Node "
+            << node.getId()
+            << ": ("
+            << node.getX()
+            << ", "
+            << node.getY()
+            << ")\n";
+    }
+
+
+    // ============================================================
+    // 3. ELEMENT MESH GENERATION
+    // ============================================================
+
+    std::vector<TrussElement> meshElements =
+        TrussMeshGenerator::generateElements(
+            meshNodes,
+            steel,
+            1
+        );
+
+    std::cout
+        << "\n========== ELEMENT MESH ==========\n\n";
+
+    for (const TrussElement& element :
+         meshElements) {
+
+        std::cout
+            << "Element "
+            << element.getId()
+            << ": Node "
+            << element.getNode1Id()
+            << " -> Node "
+            << element.getNode2Id()
+            << "\n";
+    }
+
+
+    // ============================================================
+    // 4. ORIGINAL 3-NODE TRUSS MODEL
+    // ============================================================
+
+    std::cout
+        << "\n========== ORIGINAL FEA MODEL ==========\n\n";
 
     Model model;
 
-    // ========================================
-    // 2. Create nodes
-    // ========================================
 
-    Node node1(1, 0.0, 0.0);
-    Node node2(2, 5.0, 0.0);
-    Node node3(3, 2.5, 5.0);
+    Node node1(
+        1,
+        0.0,
+        0.0
+    );
 
-    // ========================================
-    // 3. Apply boundary conditions
-    // ========================================
+    Node node2(
+        2,
+        5.0,
+        0.0
+    );
 
-    // Node 1: fixed in X and Y
+    Node node3(
+        3,
+        2.5,
+        5.0
+    );
+
+
+    // ============================================================
+    // 5. BOUNDARY CONDITIONS
+    // ============================================================
+
+    // Node 1 fixed in X and Y
     node1.setFixedX(true);
     node1.setFixedY(true);
 
-    // Node 2: roller support
-    // Fixed only in Y
+    // Node 2 fixed in Y
     node2.setFixedY(true);
 
-    // ========================================
-    // 4. Apply external load
-    // ========================================
 
-    // 10 kN downward force at Node 3
-    node3.setForceY(-10000.0);
+    // ============================================================
+    // 6. LOAD
+    // ============================================================
 
-    // ========================================
-    // 5. Add nodes to model
-    // ========================================
+    // Downward load at Node 3
+    node3.setForceY(
+        -10000.0
+    );
+
+
+    // ============================================================
+    // 7. ADD NODES
+    // ============================================================
 
     model.addNode(node1);
     model.addNode(node2);
     model.addNode(node3);
 
-    // ========================================
-    // 6. Material
-    // ========================================
 
-    // Steel
-    // Young's modulus = 200 GPa
-    // Area = 0.01 m^2
-
-    Material steel(
-        200e9,
-        0.01
-    );
-
-    // ========================================
-    // 7. Create elements
-    // ========================================
+    // ============================================================
+    // 8. CREATE ELEMENTS
+    // ============================================================
 
     TrussElement element1(
         1,
@@ -92,29 +198,238 @@ int main() {
         steel
     );
 
-    // ========================================
-    // 8. Add elements to model
-    // ========================================
-
     model.addElement(element1);
     model.addElement(element2);
     model.addElement(element3);
 
-    // ========================================
-    // 9. Display model
-    // ========================================
 
-    std::cout << std::fixed
-              << std::setprecision(6);
+    // ============================================================
+    // 9. ELEMENT STIFFNESS MATRICES
+    // ============================================================
 
     std::cout
-        << "========================================\n"
-        << "        2D STRUCTURAL FEA ENGINE       \n"
-        << "========================================\n\n";
+        << "\n========== ELEMENT STIFFNESS MATRICES ==========\n";
 
-    std::cout << "Nodes:\n";
+    for (const TrussElement& element :
+         model.getElements()) {
 
-    for (const Node& node : model.getNodes()) {
+        std::cout
+            << "\nElement "
+            << element.getId()
+            << ":\n\n";
+
+        std::cout
+            << element.getStiffnessMatrix()
+            << "\n";
+    }
+
+
+    // ============================================================
+    // 10. GLOBAL STIFFNESS MATRIX
+    // ============================================================
+
+    std::cout
+        << "\n========== GLOBAL STIFFNESS MATRIX ==========\n";
+
+    Eigen::MatrixXd K =
+        Assembler::assembleGlobalStiffness(
+            model
+        );
+
+    std::cout
+        << "\nK =\n"
+        << K
+        << "\n";
+
+
+    // ============================================================
+    // 11. GLOBAL LOAD VECTOR
+    // ============================================================
+
+    Eigen::VectorXd F =
+        Eigen::VectorXd::Zero(
+            2 * model.getNodes().size()
+        );
+
+    for (int i = 0;
+         i < static_cast<int>(
+                 model.getNodes().size());
+         ++i) {
+
+        const Node& node =
+            model.getNodes()[i];
+
+        F(2 * i) =
+            node.getForceX();
+
+        F(2 * i + 1) =
+            node.getForceY();
+    }
+
+    std::cout
+        << "\n========== LOAD VECTOR ==========\n\n";
+
+    std::cout
+        << "F =\n"
+        << F
+        << "\n";
+
+
+    // ============================================================
+    // 12. APPLY BOUNDARY CONDITIONS
+    // ============================================================
+
+    BoundaryConditions::apply(
+        K,
+        F,
+        model
+    );
+
+    std::cout
+        << "\n========== MODIFIED SYSTEM ==========\n";
+
+    std::cout
+        << "\nModified K =\n"
+        << K
+        << "\n";
+
+    std::cout
+        << "\nModified F =\n"
+        << F
+        << "\n";
+
+
+    // ============================================================
+    // 13. SOLVE KU = F
+    // ============================================================
+
+    Eigen::VectorXd U =
+        Solver::solve(
+            K,
+            F
+        );
+
+    std::cout
+        << "\n========== DISPLACEMENTS ==========\n\n";
+
+    for (int i = 0;
+         i < U.size();
+         i += 2) {
+
+        std::cout
+            << "Node "
+            << model
+                   .getNodes()[i / 2]
+                   .getId()
+            << ": Ux = "
+            << U(i) * 1000.0
+            << " mm, Uy = "
+            << U(i + 1) * 1000.0
+            << " mm\n";
+    }
+
+
+    // ============================================================
+    // 14. STRESS / STRAIN ANALYSIS
+    // ============================================================
+
+    std::cout
+        << "\n========== ELEMENT RESULTS ==========\n\n";
+
+    std::vector<ElementResult> results =
+        StressAnalysis::analyze(
+            model,
+            U
+        );
+
+    for (const ElementResult& result :
+         results) {
+
+        std::cout
+            << "Element "
+            << result.elementId
+            << ":\n";
+
+        std::cout
+            << "  Strain      = "
+            << result.strain
+            << "\n";
+
+        std::cout
+            << "  Stress      = "
+            << result.stress / 1e6
+            << " MPa\n";
+
+        std::cout
+            << "  Axial Force = "
+            << result.axialForce / 1000.0
+            << " kN\n\n";
+    }
+
+
+    // ============================================================
+    // 15. ANALYTICAL VALIDATION
+    // ============================================================
+
+    std::cout
+        << "\n========== ANALYTICAL VALIDATION ==========\n\n";
+
+    Validation::run(
+        model,
+        U
+    );
+
+
+    // ============================================================
+    // 16. REFINED BAR MESH
+    // ============================================================
+
+    std::cout
+        << "\n========== REFINED BAR MESH ==========\n\n";
+
+    Node barStart(
+        1,
+        0.0,
+        0.0
+    );
+
+    Node barEnd(
+        5,
+        5.0,
+        0.0
+    );
+
+    int barDivisions = 4;
+
+
+    // Generate 5 nodes
+    std::vector<Node> refinedNodes =
+        TrussMeshGenerator::generateNodes(
+            barStart,
+            barEnd,
+            barDivisions,
+            1
+        );
+
+
+    // Generate 4 elements
+    std::vector<TrussElement> refinedElements =
+        TrussMeshGenerator::generateElements(
+            refinedNodes,
+            steel,
+            1
+        );
+
+
+    // ============================================================
+    // 17. PRINT REFINED NODES
+    // ============================================================
+
+    std::cout
+        << "Nodes:\n\n";
+
+    for (const Node& node :
+         refinedNodes) {
 
         std::cout
             << "Node "
@@ -126,10 +441,16 @@ int main() {
             << ")\n";
     }
 
-    std::cout << "\nElements:\n";
+
+    // ============================================================
+    // 18. PRINT REFINED ELEMENTS
+    // ============================================================
+
+    std::cout
+        << "\nElements:\n\n";
 
     for (const TrussElement& element :
-         model.getElements()) {
+         refinedElements) {
 
         std::cout
             << "Element "
@@ -138,173 +459,291 @@ int main() {
             << element.getNode1Id()
             << " -> Node "
             << element.getNode2Id()
-            << ", Length = "
-            << element.getLength()
-            << " m\n";
+            << "\n";
     }
 
-    // ========================================
-    // 10. Assemble global stiffness matrix K
-    // ========================================
 
-    Eigen::MatrixXd K =
-        Assembler::assembleGlobalStiffness(model);
+    // ============================================================
+    // 19. REFINED BAR FEA
+    // ============================================================
 
     std::cout
-        << "\nGlobal stiffness matrix K:\n\n";
+        << "\n========== REFINED BAR FEA ==========\n\n";
 
-    std::cout << K << "\n";
+    Model refinedModel;
 
-    // ========================================
-    // 11. Create global force vector F
-    // ========================================
 
-    Eigen::VectorXd F =
-        LoadVector::create(model);
+    // ------------------------------------------------------------
+    // STEP A
+    // ------------------------------------------------------------
 
     std::cout
-        << "\nForce vector F before boundary conditions:\n\n";
+        << "Step A: Creating refined model...\n";
 
-    std::cout << F << "\n";
 
-    // ========================================
-    // 12. Apply boundary conditions
-    // ========================================
+    // ------------------------------------------------------------
+    // STEP B
+    // Add nodes + boundary conditions + load
+    // ------------------------------------------------------------
+
+    for (Node& node :
+         refinedNodes) {
+
+        /*
+            This is a horizontal axial bar.
+
+            Therefore vertical displacement is constrained
+            at every node.
+
+            This removes unnecessary free Y DOFs and makes
+            the axial-bar verification problem stable.
+        */
+
+        node.setFixedY(true);
+
+
+        // Left end fixed in X
+        if (node.getId() == 1) {
+
+            node.setFixedX(true);
+        }
+
+
+        // 10,000 N tensile load at right end
+        if (node.getId() == 5) {
+
+            node.setForceX(
+                10000.0
+            );
+        }
+
+
+        refinedModel.addNode(
+            node
+        );
+    }
+
+    std::cout
+        << "Step B: Nodes added to model.\n";
+
+
+    // ------------------------------------------------------------
+    // STEP C
+    // Add elements
+    // ------------------------------------------------------------
+
+    for (const TrussElement& element :
+         refinedElements) {
+
+        refinedModel.addElement(
+            element
+        );
+    }
+
+    std::cout
+        << "Step C: Elements added to model.\n";
+
+
+    // ============================================================
+    // 20. ASSEMBLE REFINED GLOBAL STIFFNESS MATRIX
+    // ============================================================
+
+    std::cout
+        << "Step D: Assembling stiffness matrix...\n";
+
+    Eigen::MatrixXd refinedK =
+        Assembler::assembleGlobalStiffness(
+            refinedModel
+        );
+
+    std::cout
+        << "Step E: Stiffness matrix assembled.\n";
+
+
+    // ============================================================
+    // 21. CREATE REFINED LOAD VECTOR
+    // ============================================================
+
+    Eigen::VectorXd refinedF =
+        Eigen::VectorXd::Zero(
+            2 * refinedModel.getNodes().size()
+        );
+
+    for (int i = 0;
+         i < static_cast<int>(
+                 refinedModel.getNodes().size());
+         ++i) {
+
+        const Node& node =
+            refinedModel.getNodes()[i];
+
+        refinedF(2 * i) =
+            node.getForceX();
+
+        refinedF(2 * i + 1) =
+            node.getForceY();
+    }
+
+
+    // ============================================================
+    // 22. APPLY REFINED BOUNDARY CONDITIONS
+    // ============================================================
+
+    std::cout
+        << "Step F: Applying boundary conditions...\n";
 
     BoundaryConditions::apply(
-        K,
-        F,
-        model
+        refinedK,
+        refinedF,
+        refinedModel
     );
 
-    // ========================================
-    // 13. Display modified system
-    // ========================================
+    std::cout
+        << "Step G: Boundary conditions applied.\n";
+
+
+    // ============================================================
+    // 23. SOLVE REFINED SYSTEM
+    // ============================================================
 
     std::cout
-        << "\nK after boundary conditions:\n\n";
+        << "Step H: Solving system...\n";
 
-    std::cout << K << "\n";
-
-    std::cout
-        << "\nF after boundary conditions:\n\n";
-
-    std::cout << F << "\n";
-
-    // ========================================
-    // 14. Check matrix properties
-    // ========================================
+    Eigen::VectorXd refinedU =
+        Solver::solve(
+            refinedK,
+            refinedF
+        );
 
     std::cout
-        << "\nMatrix size: "
-        << K.rows()
-        << " x "
-        << K.cols()
-        << "\n";
+        << "Step I: System solved.\n";
+
+
+    // ============================================================
+    // 24. PRINT REFINED DISPLACEMENTS
+    // ============================================================
 
     std::cout
-        << "Is K symmetric? "
-        << K.isApprox(K.transpose())
-        << "\n";
+        << "\n========== REFINED BAR DISPLACEMENTS ==========\n\n";
 
-    // ========================================
-    // 15. Solve KU = F
-    // ========================================
-
-    try {
-
-        Eigen::VectorXd U =
-            Solver::solve(K, F);
-
-        // ====================================
-        // 16. Print displacement vector
-        // ====================================
+    for (int i = 0;
+         i < refinedU.size();
+         i += 2) {
 
         std::cout
-            << "\nDisplacement vector U (meters):\n\n";
-
-        std::cout << U << "\n";
-
-        // ====================================
-        // 17. Display nodal displacements
-        // ====================================
-
-        std::cout
-            << "\n========== FEA SOLUTION ==========\n\n";
-
-        for (const Node& node : model.getNodes()) {
-
-            int baseDOF =
-                2 * (node.getId() - 1);
-
-            double ux =
-                U(baseDOF);
-
-            double uy =
-                U(baseDOF + 1);
-
-            // Convert meters → millimeters
-            double uxMM =
-                ux * 1000.0;
-
-            double uyMM =
-                uy * 1000.0;
-
-            std::cout
-                << "Node "
-                << node.getId()
-                << ":\n";
-
-            std::cout
-                << "  Ux = "
-                << uxMM
-                << " mm\n";
-
-            std::cout
-                << "  Uy = "
-                << uyMM
-                << " mm\n\n";
-        }
-
-        // ====================================
-        // 18. Calculate maximum displacement
-        // ====================================
-
-        double maxDisplacement = 0.0;
-
-        for (int i = 0; i < U.size(); ++i) {
-
-            double displacement =
-                std::abs(U(i));
-
-            if (displacement > maxDisplacement) {
-                maxDisplacement = displacement;
-            }
-        }
-
-        std::cout
-            << "Maximum displacement = "
-            << maxDisplacement * 1000.0
+            << "Node "
+            << refinedModel
+                   .getNodes()[i / 2]
+                   .getId()
+            << ": Ux = "
+            << refinedU(i) * 1000.0
+            << " mm, Uy = "
+            << refinedU(i + 1) * 1000.0
             << " mm\n";
+    }
+
+
+    // ============================================================
+    // 25. ANALYTICAL BAR SOLUTION
+    // ============================================================
+
+    /*
+                P L
+        u = -----------
+              A E
+
+        P = 10000 N
+        L = 5 m
+        A = 0.01 m^2
+        E = 200e9 Pa
+
+        u = 0.000025 m
+          = 0.025 mm
+    */
+
+    double analyticalBarDisplacement =
+        (
+            10000.0 * 5.0
+        )
+        /
+        (
+            0.01 * 200e9
+        );
+
+
+    // Node 5 X displacement
+    // Node 5 = index 4
+    // X DOF = 2 * 4 = 8
+
+    double feaBarDisplacement =
+        refinedU(8);
+
+
+    // ============================================================
+    // 26. ERROR
+    // ============================================================
+
+    double barError =
+        std::abs(
+            feaBarDisplacement
+            -
+            analyticalBarDisplacement
+        )
+        /
+        std::abs(
+            analyticalBarDisplacement
+        )
+        * 100.0;
+
+
+    // ============================================================
+    // 27. REFINED VALIDATION RESULT
+    // ============================================================
+
+    std::cout
+        << "\n========== REFINED MESH VALIDATION ==========\n\n";
+
+    std::cout
+        << "Analytical displacement = "
+        << analyticalBarDisplacement * 1000.0
+        << " mm\n";
+
+    std::cout
+        << "FEA displacement        = "
+        << feaBarDisplacement * 1000.0
+        << " mm\n";
+
+    std::cout
+        << "Error                   = "
+        << barError
+        << " %\n";
+
+
+    if (barError < 1e-6) {
 
         std::cout
-            << "\n========================================\n";
-
+            << "\nREFINED MESH VALIDATION PASSED\n";
     }
-    catch (const std::exception& error) {
+    else {
 
-        std::cerr
-            << "\n========== FEA ERROR ==========\n\n";
-
-        std::cerr
-            << error.what()
-            << "\n";
-
-        std::cerr
-            << "\n================================\n";
-
-        return 1;
+        std::cout
+            << "\nREFINED MESH VALIDATION FAILED\n";
     }
+
+
+    // ============================================================
+    // 28. COMPLETE
+    // ============================================================
+
+    std::cout
+        << "\n========================================\n";
+
+    std::cout
+        << "       FEA ANALYSIS COMPLETE\n";
+
+    std::cout
+        << "========================================\n";
+
 
     return 0;
 }

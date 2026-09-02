@@ -6,12 +6,18 @@ void BoundaryConditions::apply(
     const Model& model
 ) {
 
-    const auto& nodes = model.getNodes();
+    const auto& nodes =
+        model.getNodes();
 
-    for (const Node& node : nodes) {
+    for (int index = 0;
+         index < static_cast<int>(nodes.size());
+         ++index) {
+
+        const Node& node =
+            nodes[index];
 
         int baseDOF =
-            2 * (node.getId() - 1);
+            2 * index;
 
         int dofs[2] = {
             baseDOF,
