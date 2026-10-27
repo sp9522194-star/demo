@@ -14,4 +14,7 @@ const std::vector<Node>& Model::getNodes() const {
 
 const std::vector<TrussElement>& Model::getElements() const {
     return elements;
-}
+} djbksbdksjc
+
+
+ dclsadlcms
